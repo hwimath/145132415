@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>이차방정식 빈출 (5)</title>
+  <!-- MathJax for LaTeX rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    button {
+      background-color: white;
+      color: black;
+      border: none;
+      padding: 8px 16px;
+      cursor: pointer;
+      margin: 8px 0;
+    }
+    #quiz-container {
+      margin-top: 20px;
+    }
+    #energy-bar {
+      width: 300px;
+      height: 20px;
+      background-color: white;
+      margin: 10px 0;
+      position: relative;
+    }
+    #energy-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 20px;
+      background-color: black;
+      width: 100%;
+    }
+    #response {
+      margin-top: 20px;
+      color: yellow;
+      white-space: pre-wrap;
+    }
+    .hidden {
+      display: none;
+    }
+    #question-area, #answer-area, #result-area, #next-btn, #correct-answer {
+      margin: 10px 0;
+    }
+    #total-time {
+      margin: 10px 0;
+      color: lightgray;
+    }
+  </style>
+</head>
+<body>
+  <h1>이차방정식 빈출 (5)</h1>
+
+  <!-- 첫 화면: 이름 입력, 난이도 선택 -->
+  <div id="start-screen">
+    <label for="player-name">이름: </label>
+    <input type="text" id="player-name" placeholder="이름을 입력하세요" />
+
+    <p>난이도를 선택하세요:</p>
+    <button onclick="selectDifficulty('최상')">최상 (20초/문제, +20점)</button>
+    <button onclick="selectDifficulty('상')">상 (30초/문제, +15점)</button>
+    <button onclick="selectDifficulty('중')">중 (40초/문제, +13점)</button>
+    <button onclick="selectDifficulty('하')">하 (무제한, +10점)</button>
+  </div>
+
+  <!-- 퀴즈 영역 -->
+  <div id="quiz-container" class="hidden">
+    <div id="info-bar">
+      <div id="total-time">총 진행 시간: 0초 경과</div>
+      <div>남은 기회: <span id="lives"></span></div>
+      <div>현재 점수: <span id="score"></span></div>
+    </div>
+
+    <div id="energy-bar">
+      <div id="energy-fill"></div>
+    </div>
+
+    <div id="question-area"></div>
+    <div id="answer-area"></div>
+    <div id="correct-answer" class="hidden"></div>
+    <div id="result-area"></div>
+    <button id="next-btn" class="hidden" onclick="goNextQuestion()">다음 문제</button>
+  </div>
+
+  <!-- 게임 종료 화면 -->
+  <div id="end-screen" class="hidden">
+    <h2>게임 종료</h2>
+    <p>최종 점수: <span id="final-score"></span></p>
+    <p>총 소요 시간(초): <span id="final-time"></span></p>
+    <button onclick="sendScore()">점수전송</button>
+    <div id="response"></div>
+  </div>
+
+  <script>
+    /************************************************
+     *  1. 점수 전송 함수
+     ************************************************/
+    async function saveData(game, name, score, elapsedTime) {
+      const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+      const requestData = {
+        game,
+        name,
+        score: parseInt(score, 10),
+        elapsedTime: parseInt(elapsedTime, 10)
+      };
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok) {
+          document.getElementById('response').innerText =
+              `성공: ${JSON.stringify(responseData, null, 2)}`;
+        } else {
+          document.getElementById('response').innerText =
+              `오류: ${JSON.stringify(responseData, null, 2)}`;
+        }
+      } catch (error) {
+        console.error('요청 실패:', error);
+        document.getElementById('response').innerText =
+            `네트워크 오류: ${error.message}`;
+      }
+    }
+
+    /************************************************
+     *  2. 문제 목록
+     *     (문제 #2: 망원경 문제 삭제됨)
+     ************************************************/
+    const questionsData = [
+      {
+        // #5
+        question: "\\(f(x)=-2x^2+12x+m\\)의 최대값이 5일 때, \\(1\\le x\\le4\\)에서의 최솟값은?",
+        choices: [
+          "\\(-3\\)",
+          "\\(-2\\)",
+          "\\(-1\\)",
+          "0",
+          "1"
+        ],
+        correctIndex: 0,
+        correctAnswerLatex: "\\(-3\\)"
+      },
+      {
+        // #7
+        question: "\\(2f(x)-3f(-x)=x^2+30x+1\\)을 만족하는 \\(f(x)\\)에서, 최대값 \\(f(\\alpha)\\)와 \\(f(\\alpha^2)\\)의 차는?",
+        choices: [
+          "30",
+          "32",
+          "34",
+          "36",
+          "38"
+        ],
+        correctIndex: 3,
+        correctAnswerLatex: "36"
+      },
+      {
+        // #8
+        question: "\\(0\\le x\\le3\\)에서 \\(f(x)=ax^2-2ax+2a^2-3a\\)의 최솟값이 6이 되도록 하는 \\(a\\)들의 곱은?",
+        choices: [
+          "\\(-9\\)",
+          "\\(-3\\sqrt{3}\\)",
+          "\\(-3\\)",
+          "\\(-\\sqrt{3}\\)",
+          "\\(-1\\)"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "\\(-3\\sqrt{3}\\)"
+      },
+      {
+        // #11
+        question: "\\(x^2+2ax+y^2+4by+a^2+4b^2+c\\)가 \\(x=2,y=3\\)에서 최솟값 4를 갖는다. \\(a+b+c\\)=?",
+        choices: [
+          "\\(\\dfrac{1}{2}\\)",
+          "\\(\\dfrac{3}{2}\\)",
+          "\\(\\dfrac{5}{2}\\)",
+          "\\(\\dfrac{7}{2}\\)",
+          "\\(\\dfrac{9}{2}\\)"
+        ],
+        correctIndex: 0,
+        correctAnswerLatex: "\\(\\dfrac{1}{2}\\)"
+      },
+      {
+        // #12
+        question: "\\(0\\le x<3\\)에서 \\(f(x)=x^2-2x+a\\)의 최대값과 최솟값의 합이 10일 때 \\(a\\)=?",
+        choices: [
+          "1","2","3","4","5"
+        ],
+        correctIndex: 3,
+        correctAnswerLatex: "4"
+      },
+      {
+        // #13
+        question: "\\(3\\le x\\le5\\)에서 \\(x^2-4x-4k+3\\le0\\)가 항상 성립하도록 하는 \\(k\\)의 최솟값은?",
+        choices: [
+          "1","2","3","4","5"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "2"
+      },
+      {
+        // #14
+        question: "\\(-2\\le t\\le4\\)에서 \\(f(t)=-t^2+6t-1\\)의 최대값과 최솟값을 더한 값은?",
+        choices: [
+          "\\(-9\\)",
+          "\\(-8\\)",
+          "\\(-7\\)",
+          "\\(-6\\)",
+          "\\(-5\\)"
+        ],
+        correctIndex: 0,
+        correctAnswerLatex: "\\(-9\\)"
+      },
+      {
+        // #15
+        question: "\\(0\\le x\\le3\\)에서 \\(f(x)=(2x-3)^2 -2(2x-3)+5\\)의 최대값과 최솟값의 합은?",
+        choices: [
+          "21","22","23","24","25"
+        ],
+        correctIndex: 3,
+        correctAnswerLatex: "24"
+      },
+      {
+        // #16
+        question: "A상품 가격 1000원→400개 판매, 10원 인하마다 20개 증가. 한 달 최대 매출액은?",
+        choices: [
+          "700000원","720000원","750000원","760000원","780000원"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "720000원"
+      },
+      {
+        // #20
+        question: "\\(0\\le x\\le a\\)에서 \\(x^2-8x+(a+6)\\)의 최솟값이 0이 되도록 하는 모든 \\(a\\)의 합은?",
+        choices: [
+          "11","12","13","14","15"
+        ],
+        correctIndex: 0,
+        correctAnswerLatex: "11"
+      },
+      {
+        // #22
+        question: "\\(y=x^2-3x+a\\)와 \\(y=2x-1\\)이 교점 하나를 갖고, 그 교점의 x좌표가 1일 때 이차함수의 최솟값은?",
+        choices: [
+          "\\(\\dfrac{1}{4}\\)",
+          "\\(\\dfrac{3}{4}\\)",
+          "\\(\\dfrac{5}{4}\\)",
+          "\\(\\dfrac{7}{4}\\)",
+          "\\(\\dfrac{9}{4}\\)"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "\\(\\dfrac{3}{4}\\)"
+      },
+      {
+        // #25
+        question: "\\(-1\\le x\\le6\\)에서 \\(y=|x^2-4x-5|\\)의 최대값과 최솟값의 합은?",
+        choices: [
+          "7","8","6","9","10"
+        ],
+        correctIndex: 3,
+        correctAnswerLatex: "9"
+      },
+      {
+        // #27
+        question: "\\(-2x^2+4xy-4y^2+2x+k\\)가 \\(x=a,y=b\\)에서 최대값 10을 갖는다. \\(abk\\)=?",
+        choices: [
+          "\\(\\dfrac{1}{2}\\)",
+          "\\(\\dfrac{3}{2}\\)",
+          "\\(\\dfrac{5}{2}\\)",
+          "\\(\\dfrac{7}{2}\\)",
+          "\\(\\dfrac{9}{2}\\)"
+        ],
+        correctIndex: 4,
+        correctAnswerLatex: "\\(\\dfrac{9}{2}\\)"
+      },
+      {
+        // #28
+        question: "\\(x^2-4x+y^2+2y+6\\)의 최솟값은? (x,y는 실수)",
+        choices: [
+          "\\(-2\\)","\\(-1\\)","0","1","2"
+        ],
+        correctIndex: 3,
+        correctAnswerLatex: "1"
+      },
+      {
+        // #30
+        question: "지면15m에서 공을 초속12m로 위로 던짐: \\(f(t)=-5t^2+12t+15\\). \\(1\\le t\\le2\\)에서 최고높이와 최솟값의 차는?",
+        choices: [
+          "3.1m","3.2m","3.3m","3.4m","3.5m"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "3.2m"
+      },
+      {
+        // #32
+        question: "\\(f(x)=x^2-4x\\). 구간 \\(a\\le x\\le4\\)에서 최댓값이 5이면, (단 a<4) \\(a\\)=?",
+        choices: [
+          "\\(-2\\)","\\(-1\\)","0","1","2"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "\\(-1\\)"
+      },
+      {
+        // #44
+        question: "음이 아닌 실수 x,y, \\(2x+y-6=0\\). 식 \\(x^2-2x-2y+3\\)의 최대값=M, 최솟값=m. M+m=?",
+        choices: [
+          "\\(-3\\)","\\(-2\\)","\\(-1\\)","1","3"
+        ],
+        correctIndex: 0,
+        correctAnswerLatex: "\\(-3\\)"
+      },
+      {
+        // #48
+        question: "\\(x\\ge0,y\\ge0,x+y=2\\). \\(x^2+2y^2\\)의 최대값을 M, 최솟값을 m이라 할 때 M+m=?",
+        choices: [
+          "\\(\\dfrac{31}{3}\\)","\\(\\dfrac{32}{3}\\)","11","\\(\\dfrac{34}{3}\\)","\\(\\dfrac{35}{3}\\)"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "\\(\\dfrac{32}{3}\\)"
+      },
+      {
+        // #49
+        question: "자연수 x에서 \\(f(x)=2x^2-11x+10\\)의 최솟값은?",
+        choices: [
+          "\\(-4\\)","\\(-5\\)","\\(-6\\)","\\(-7\\)","\\(-8\\)"
+        ],
+        correctIndex: 1,
+        correctAnswerLatex: "\\(-5\\)"
+      }
+    ];
+
+    /************************************************
+     *  3. 전역 변수들
+     ************************************************/
+    let playerName = "";
+    let difficulty = "";
+    let timePerQuestion = 0; // 0이면 무제한
+    let scorePerQuestion = 0;
+    let totalScore = 0;
+    let lives = 3;
+    let currentIndex = 0;
+    let usedIndices = [];
+    let gameStarted = false;
+    let totalTime = 0;
+    let totalTimeInterval = null;
+    let questionInterval = null;
+    let energy = 100;
+    let startTime = 0;
+
+    /************************************************
+     *  4. 난이도 선택
+     ************************************************/
+    function selectDifficulty(diff) {
+      const nameInput = document.getElementById("player-name");
+      if (!nameInput.value.trim()) {
+        alert("이름을 입력해주세요.");
+        return;
+      }
+      playerName = nameInput.value.trim();
+      difficulty = diff;
+
+      switch(diff) {
+        case "최상":
+          timePerQuestion = 20;
+          scorePerQuestion = 20;
+          break;
+        case "상":
+          timePerQuestion = 30;
+          scorePerQuestion = 15;
+          break;
+        case "중":
+          timePerQuestion = 40;
+          scorePerQuestion = 13;
+          break;
+        case "하":
+          timePerQuestion = 0;
+          scorePerQuestion = 10;
+          break;
+      }
+
+      document.getElementById("start-screen").classList.add("hidden");
+      document.getElementById("quiz-container").classList.remove("hidden");
+
+      initGame();
+    }
+
+    /************************************************
+     *  5. 게임 초기화
+     ************************************************/
+    function initGame() {
+      totalScore = 0;
+      lives = 3;
+      currentIndex = 0;
+      usedIndices = [];
+      gameStarted = true;
+      document.getElementById("score").textContent = totalScore;
+      document.getElementById("lives").textContent = lives;
+
+      // 문제 순서 섞기
+      shuffleArray(questionsData);
+
+      // 전체 시간 타이머
+      totalTime = 0;
+      startTime = Date.now();
+      totalTimeInterval = setInterval(() => {
+        totalTime++;
+        document.getElementById("total-time").textContent = `총 진행 시간: ${totalTime}초 경과`;
+      }, 1000);
+
+      loadQuestion();
+    }
+
+    /************************************************
+     *  6. 문제 불러오기
+     ************************************************/
+    function loadQuestion() {
+      let qIndex;
+      // 첫 회차는 순서대로
+      if (usedIndices.length < questionsData.length) {
+        qIndex = usedIndices.length;
+        usedIndices.push(qIndex);
+      } else {
+        // 2회차부터는 무작위
+        qIndex = Math.floor(Math.random() * questionsData.length);
+      }
+      currentIndex = qIndex;
+
+      const qData = questionsData[qIndex];
+      const questionArea = document.getElementById("question-area");
+      const answerArea = document.getElementById("answer-area");
+      const correctAnswerDiv = document.getElementById("correct-answer");
+      const resultArea = document.getElementById("result-area");
+      const nextBtn = document.getElementById("next-btn");
+
+      // 화면 초기화
+      questionArea.innerHTML = "";
+      answerArea.innerHTML = "";
+      correctAnswerDiv.innerHTML = "";
+      correctAnswerDiv.classList.add("hidden");
+      resultArea.textContent = "";
+      nextBtn.classList.add("hidden");
+
+      energy = 100;
+      document.getElementById("energy-fill").style.width = "100%";
+      if (questionInterval) clearInterval(questionInterval);
+
+      // 문제 출력
+      questionArea.innerHTML = `<p>${qData.question}</p>`;
+
+      // 보기 섞기
+      let choiceIndices = [0, 1, 2, 3, 4];
+      if (qData.choices.length === 5) {
+        shuffleArray(choiceIndices);
+      } else {
+        // 혹시나 보기 4개 이하일 경우 처리
+        choiceIndices = choiceIndices.slice(0, qData.choices.length);
+        shuffleArray(choiceIndices);
+      }
+
+      // 보기 렌더
+      choiceIndices.forEach(idx => {
+        const btn = document.createElement("button");
+        btn.innerHTML = qData.choices[idx];
+        btn.onclick = () => checkAnswer(idx);
+        answerArea.appendChild(btn);
+        answerArea.appendChild(document.createElement("br"));
+      });
+
+      // 수식 렌더링
+      MathJax.typeset();
+
+      // 제한 시간 모드일 경우
+      if (timePerQuestion > 0) {
+        questionInterval = setInterval(() => {
+          energy -= (100 / (timePerQuestion * 10));
+          if (energy <= 0) {
+            energy = 0;
+            document.getElementById("energy-fill").style.width = "0%";
+            clearInterval(questionInterval);
+            lives--;
+            if (lives <= 0) {
+              endGame();
+              return;
+            }
+            document.getElementById("lives").textContent = lives;
+            resultArea.textContent = "시간 초과! 정답 기회 소진!";
+            showCorrectAnswer();
+            nextBtn.classList.remove("hidden");
+          } else {
+            document.getElementById("energy-fill").style.width = energy + "%";
+          }
+        }, 100);
+      } else {
+        // 하 난이도(무제한)에서는 게이지 고정
+        document.getElementById("energy-fill").style.width = "100%";
+      }
+    }
+
+    /************************************************
+     *  7. 답안 체크
+     ************************************************/
+    function checkAnswer(chosenIdx) {
+      if (questionInterval) {
+        clearInterval(questionInterval);
+      }
+
+      const qData = questionsData[currentIndex];
+      const correctIndex = qData.correctIndex;
+      const resultArea = document.getElementById("result-area");
+      const nextBtn = document.getElementById("next-btn");
+
+      if (chosenIdx === correctIndex) {
+        resultArea.textContent = "정답입니다!";
+        totalScore += scorePerQuestion;
+        document.getElementById("score").textContent = totalScore;
+      } else {
+        resultArea.textContent = "오답입니다!";
+        lives--;
+        document.getElementById("lives").textContent = lives;
+        if (lives <= 0) {
+          endGame();
+          return;
+        }
+        showCorrectAnswer();
+      }
+      nextBtn.classList.remove("hidden");
+    }
+
+    function showCorrectAnswer() {
+      const qData = questionsData[currentIndex];
+      const correctAnswerDiv = document.getElementById("correct-answer");
+      correctAnswerDiv.classList.remove("hidden");
+      correctAnswerDiv.innerHTML = `정답: ${qData.correctAnswerLatex}`;
+      MathJax.typeset();
+    }
+
+    function goNextQuestion() {
+      if (!gameStarted) return;
+      loadQuestion();
+    }
+
+    /************************************************
+     *  8. 게임 종료
+     ************************************************/
+    function endGame() {
+      gameStarted = false;
+      if (questionInterval) clearInterval(questionInterval);
+      if (totalTimeInterval) clearInterval(totalTimeInterval);
+
+      document.getElementById("quiz-container").classList.add("hidden");
+      document.getElementById("end-screen").classList.remove("hidden");
+
+      const finalScoreSpan = document.getElementById("final-score");
+      finalScoreSpan.textContent = totalScore;
+
+      const elapsedTimeSec = parseInt((Date.now() - startTime) / 1000, 10);
+      document.getElementById("final-time").textContent = elapsedTimeSec;
+    }
+
+    /************************************************
+     *  9. 점수 전송
+     ************************************************/
+    function sendScore() {
+      const elapsedTimeSec = parseInt((Date.now() - startTime) / 1000, 10);
+      saveData("이차방정식 빈출 (5)", playerName, totalScore, elapsedTimeSec);
+    }
+
+    /************************************************
+     *  10. 배열 셔플
+     ************************************************/
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+  </script>
+</body>
+</html>
